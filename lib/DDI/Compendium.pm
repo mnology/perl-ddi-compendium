@@ -1,7 +1,9 @@
-package DDI::Compendium;
+use MooseX::Declare;
 
-use warnings;
-use strict;
+use English qw(-no_match_vars);
+use URI;
+use WWW::Mechanize;
+use XML::LibXML;
 
 =head1 NAME
 
@@ -15,7 +17,6 @@ Version 0.01
 
 our $VERSION = '0.01';
 
-
 =head1 SYNOPSIS
 
 Quick summary of what the module does.
@@ -27,25 +28,103 @@ Perhaps a little code snippet.
     my $foo = DDI::Compendium->new();
     ...
 
-=head1 EXPORT
-
-A list of functions that can be exported.  You can delete this section
-if you don't export anything, such as for a purely object-oriented module.
-
-=head1 FUNCTIONS
-
-=head2 function1
-
 =cut
 
-sub function1 {
+class DDI::Compendium {
+
+  # API URI attribute construction
+  has base_uri => (
+    isa      => 'Str',
+    is       => 'ro',
+    required => 1,
+    default =>
+      'http://www.wizards.com/dndinsider/compendium/CompendiumSearch.asmx/',
+  );
+
+  my %uri_attrs = (
+    filters_uri       => 'GetFilterSelect',
+    keyword_uri       => 'KeywordSearch',
+    filter_search_uri => 'KeywordSearchWithFilters',
+    all_uri           => 'ViewAll',
+  );
+
+  while ( my ( $attr, $oper ) = each %uri_attrs ) {
+    has $attr => (
+      isa      => 'URI',
+      is       => 'ro',
+      lazy     => 1,
+      required => 1,
+      default  => sub {
+        my $self = shift;
+        URI->new( $self->base_uri() . $oper );
+      },
+    );
+  }
+
+  has ua => (
+    isa      => 'WWW::Mechanize',
+    is       => 'rw',
+    required => 1,
+    default  => sub { WWW::Mechanize->new() },
+  );
+
+  has parser => (
+    isa      => 'XML::LibXML',
+    is       => 'ro',
+    required => 1,
+    default  => sub { XML::LibXML->new(); }
+  );
+
+  has tabs => (
+    isa        => 'ArrayRef',
+    is         => 'ro',
+    lazy_build => 1,
+  );
+
+  sub _build_tabs {
+    my $self = shift;
+
+    my $null_query = {
+      Keywords => q{.},
+      Tab      => q{},
+    };
+
+    my $query_uri = $self->keyword_uri();
+    $query_uri->query_form($null_query);
+    my $tot_doc
+      = $self->parser->parse_string( $self->ua->get($query_uri)->content() )
+      or return;
+
+    return [ map { $_->data } $tot_doc->findnodes('//*/Table/text()') ];
+  }
+
+  has filters_doc => (
+    isa      => 'XML::LibXML::Document',
+    is       => 'rw',
+    lazy     => 1,
+    required => 1,
+    default  => sub {
+      my $self = shift;
+
+      $self->parser->parse_string(
+        $self->ua->get( $self->filters_uri() )->content() );
+    }
+  );
+
+=head1 METHODS
+
+=head2 is_tab
+=cut
+
+method is_tab ( Str $tab ) {
+  return if not grep { $tab eq $_ } @{$self->tabs()};
+  return 1;
 }
 
-=head2 function2
+=head2 all_query
 
 =cut
 
-sub function2 {
 }
 
 =head1 AUTHOR
@@ -57,9 +136,6 @@ Erik Johansen, C<< <mnology at gmail.com> >>
 Please report any bugs or feature requests to C<bug-ddi-compendium at rt.cpan.org>, or through
 the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=DDI-Compendium>.  I will be notified, and then you'll
 automatically be notified of progress on your bug as I make changes.
-
-
-
 
 =head1 SUPPORT
 
@@ -104,4 +180,4 @@ under the same terms as Perl itself.
 
 =cut
 
-1; # End of DDI::Compendium
+1;    # End of DDI::Compendium
