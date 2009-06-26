@@ -1,6 +1,5 @@
 use MooseX::Declare;
 
-
 =head1 NAME
 
 DDI::Compendium - The great new DDI::Compendium!
@@ -28,154 +27,139 @@ Perhaps a little code snippet.
 
 class DDI::Compendium {
 
-  use Carp qw(carp);
-  use English qw(-no_match_vars);
-  use List::MoreUtils qw(uniq);
-  use URI;
-  use WWW::Mechanize;
-  use XML::LibXML;
+    use Carp qw(carp);
+    use English qw(-no_match_vars);
+    use List::MoreUtils qw(uniq true);
+    use URI;
+    use WWW::Mechanize;
+    use XML::LibXML;
 
-  # API URI attribute construction
-  has base_uri => (
-    isa      => 'Str',
-    is       => 'ro',
-    required => 1,
-    default =>
-      'http://www.wizards.com/dndinsider/compendium/CompendiumSearch.asmx/',
-  );
-
-  my %uri_attrs = (
-    filters_uri       => 'GetFilterSelect',
-    keyword_uri       => 'KeywordSearch',
-    filter_search_uri => 'KeywordSearchWithFilters',
-    all_uri           => 'ViewAll',
-  );
-
-  while ( my ( $attr, $oper ) = each %uri_attrs ) {
-    has $attr => (
-      isa      => 'URI',
-      is       => 'ro',
-      lazy     => 1,
-      required => 1,
-      default  => sub {
-        my $self = shift;
-        URI->new( $self->base_uri() . $oper );
-      },
+    # API URI attribute construction
+    has base_uri => (
+        isa      => 'Str',
+        is       => 'ro',
+        required => 1,
+        default =>
+          'http://www.wizards.com/dndinsider/compendium/CompendiumSearch.asmx/',
     );
-  }
 
-  has ua => (
-    isa      => 'WWW::Mechanize',
-    is       => 'rw',
-    required => 1,
-    default  => sub { WWW::Mechanize->new() },
-  );
+    my %uri_attrs = (
+        filters_uri       => 'GetFilterSelect',
+        keyword_uri       => 'KeywordSearch',
+        filter_search_uri => 'KeywordSearchWithFilters',
+        all_uri           => 'ViewAll',
+    );
 
-  has parser => (
-    isa      => 'XML::LibXML',
-    is       => 'ro',
-    required => 1,
-    default  => sub { XML::LibXML->new(); }
-  );
-
-  has tabs => (
-    isa        => 'ArrayRef',
-    is         => 'ro',
-    lazy_build => 1,
-  );
-
-  sub _build_tabs {
-    my $self = shift;
-
-    my $null_query = {
-      Keywords => q{.},
-      Tab      => q{},
-    };
-
-    my $query_uri = $self->keyword_uri();
-    $query_uri->query_form($null_query);
-
-    my $content = $self->ua->get($query_uri)->content();
-    my $tot_doc = $self->parser->parse_string($content)
-      or return;
-
-    return [ map { $_->data }
-        $tot_doc->getDocumentElement->findnodes('Table/text()') ];
-  }
-
-  has filters_doc => (
-    isa      => 'XML::LibXML::Document',
-    is       => 'rw',
-    lazy     => 1,
-    required => 1,
-    default  => sub {
-      my $self = shift;
-
-      $self->parser->parse_string(
-        $self->ua->get( $self->filters_uri() )->content() );
+    while ( my ( $attr, $oper ) = each %uri_attrs ) {
+        has $attr => (
+            isa      => 'URI',
+            is       => 'ro',
+            lazy     => 1,
+            required => 1,
+            default  => sub {
+                my $self = shift;
+                URI->new( $self->base_uri() . $oper );
+            },
+        );
     }
-  );
 
-  has filter_types => (
-    isa        => 'ArrayRef',
-    is         => 'rw',
-    lazy_build => 1,
-  );
+    has ua => (
+        isa      => 'WWW::Mechanize',
+        is       => 'rw',
+        required => 1,
+        default  => sub { WWW::Mechanize->new() },
+    );
 
-  sub _build_filter_types {
-    my $self = shift;
+    has parser => (
+        isa      => 'XML::LibXML',
+        is       => 'ro',
+        required => 1,
+        default  => sub { XML::LibXML->new(); }
+    );
 
-    return [
-      uniq(
-        map { $_->findvalue('type') }
-          $self->filters_doc->getDocumentElement->findnodes('Option')
-      )
-    ];
-  }
+    has tabs => (
+        isa        => 'ArrayRef',
+        is         => 'ro',
+        lazy_build => 1,
+    );
 
-  has filter_data => (
-    isa        => 'HashRef',
-    is         => 'rw',
-    lazy_build => 1,
-  );
+    sub _build_tabs {
+        my $self = shift;
 
-  sub _build_filter_data {
-    my $self = shift;
+        my $null_query = {
+            Keywords => q{.},
+            Tab      => q{},
+        };
 
-    my $doc_elem    = $self->filters_doc->getDocumentElement;
-    my $filter_data = {
-      map {
-        $_->findvalue('val') => {
-          type => $_->findvalue('type'),
-          id   => $_->findvalue('id'),
-          }
+        my $query_uri = $self->keyword_uri();
+        $query_uri->query_form($null_query);
+
+        my $content = $self->ua->get($query_uri)->content();
+        my $tot_doc = $self->parser->parse_string($content)
+          or return;
+
+        return [ map { $_->data } $tot_doc->getDocumentElement->findnodes('Table/text()') ];
+    }
+
+    has filters_doc => (
+        isa      => 'XML::LibXML::Document',
+        is       => 'rw',
+        lazy     => 1,
+        required => 1,
+        default  => sub {
+            my $self = shift;
+
+            $self->parser->parse_string( $self->ua->get( $self->filters_uri() )->content() );
         }
-        map { $doc_elem->findnodes("Option[type = '$_']") }
-        @{ $self->filter_types }
-    };
+    );
 
-    return $filter_data;
+    has filter_types => (
+        isa        => 'ArrayRef',
+        is         => 'rw',
+        lazy_build => 1,
+    );
 
-  }
+    sub _build_filter_types {
+        my $self = shift;
 
-=head1 METHODS
-
-=cut
-
-  method is_in( Str $val, ArrayRef $list) {
-    return
-      if not grep { $val eq $_ } @{ $list };
-    return 1;
+        return [
+            uniq(
+                map { $_->findvalue('type') }
+                  $self->filters_doc->getDocumentElement->findnodes('Option')
+            )
+        ];
     }
+
+    has filter_data => (
+        isa        => 'HashRef',
+        is         => 'rw',
+        lazy_build => 1,
+    );
+
+    sub _build_filter_data {
+        my $self = shift;
+
+        my $doc_elem    = $self->filters_doc->getDocumentElement;
+        return {
+            map {
+                $_->findvalue('val') => {
+                    type => $_->findvalue('type'),
+                    id   => $_->findvalue('id'),
+                  }
+              }
+              map { $doc_elem->findnodes("Option[type = '$_']") } @{ $self->filter_types }
+        };
+    }
+
 
     method tab_view_all( Str $tab ) {
 
-    if ( !$self->is_in($tab, $self->tabs) ) {
-      carp("'$tab': Unknown Tab");
-      return;
-    }
+      if ( not true { $tab eq $_ } @{ $self->tabs } ) {
+          carp("'$tab': Unknown Tab");
+          return;
+      }
 
-    my $all_query = { Tab => $tab, };
+      my $all_query = { Tab => $tab, };
       my $query_uri = $self->all_uri();
 
       $query_uri->query_form($all_query);
@@ -184,15 +168,15 @@ class DDI::Compendium {
       return $self->parser->parse_string($content);
     }
 
-  method filters_by_type ( Str $type ) {
-    if ( !$self->is_in( $type, $self->filter_types ) ) {
-      carp("Unknown filter type: '$type'");
-      return;
-    }
+    method filters_by_type( Str $type ) {
+      if ( not true { $type eq $_ } @{ $self->filter_types } ) {
+        carp("Unknown filter type: '$type'");
+        return;
+      }
 
-    return grep { $_ if $self->filter_data->{$_}->{type} eq $type }
-      keys %{ $self->filter_data }
-  }
+      return grep { $_ if $self->filter_data->{$_}->{type} eq $type }
+        keys %{ $self->filter_data }
+    }
 
 }
 
