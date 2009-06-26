@@ -1,9 +1,5 @@
 use MooseX::Declare;
 
-use English qw(-no_match_vars);
-use URI;
-use WWW::Mechanize;
-use XML::LibXML;
 
 =head1 NAME
 
@@ -31,6 +27,13 @@ Perhaps a little code snippet.
 =cut
 
 class DDI::Compendium {
+
+  use Carp qw(carp);
+  use English qw(-no_match_vars);
+  use List::MoreUtils qw(uniq);
+  use URI;
+  use WWW::Mechanize;
+  use XML::LibXML;
 
   # API URI attribute construction
   has base_uri => (
@@ -91,11 +94,13 @@ class DDI::Compendium {
 
     my $query_uri = $self->keyword_uri();
     $query_uri->query_form($null_query);
-    my $tot_doc
-      = $self->parser->parse_string( $self->ua->get($query_uri)->content() )
+
+    my $content = $self->ua->get($query_uri)->content();
+    my $tot_doc = $self->parser->parse_string($content)
       or return;
 
-    return [ map { $_->data } $tot_doc->findnodes('//*/Table/text()') ];
+    return [ map { $_->data }
+        $tot_doc->getDocumentElement->findnodes('Table/text()') ];
   }
 
   has filters_doc => (
@@ -111,19 +116,83 @@ class DDI::Compendium {
     }
   );
 
+  has filter_types => (
+    isa        => 'ArrayRef',
+    is         => 'rw',
+    lazy_build => 1,
+  );
+
+  sub _build_filter_types {
+    my $self = shift;
+
+    return [
+      uniq(
+        map { $_->findvalue('type') }
+          $self->filters_doc->getDocumentElement->findnodes('Option')
+      )
+    ];
+  }
+
+  has filter_data => (
+    isa        => 'HashRef',
+    is         => 'rw',
+    lazy_build => 1,
+  );
+
+  sub _build_filter_data {
+    my $self = shift;
+
+    my $doc_elem    = $self->filters_doc->getDocumentElement;
+    my $filter_data = {
+      map {
+        $_->findvalue('val') => {
+          type => $_->findvalue('type'),
+          id   => $_->findvalue('id'),
+          }
+        }
+        map { $doc_elem->findnodes("Option[type = '$_']") }
+        @{ $self->filter_types }
+    };
+
+    return $filter_data;
+
+  }
+
 =head1 METHODS
 
-=head2 is_tab
 =cut
 
-method is_tab ( Str $tab ) {
-  return if not grep { $tab eq $_ } @{$self->tabs()};
-  return 1;
-}
+  method is_in( Str $val, ArrayRef $list) {
+    return
+      if not grep { $val eq $_ } @{ $list };
+    return 1;
+    }
 
-=head2 all_query
+    method tab_view_all( Str $tab ) {
 
-=cut
+    if ( !$self->is_in($tab, $self->tabs) ) {
+      carp("'$tab': Unknown Tab");
+      return;
+    }
+
+    my $all_query = { Tab => $tab, };
+      my $query_uri = $self->all_uri();
+
+      $query_uri->query_form($all_query);
+      my $content = $self->ua->get($query_uri)->content;
+
+      return $self->parser->parse_string($content);
+    }
+
+  method filters_by_type ( Str $type ) {
+    if ( !$self->is_in( $type, $self->filter_types ) ) {
+      carp("Unknown filter type: '$type'");
+      return;
+    }
+
+    return grep { $_ if $self->filter_data->{$_}->{type} eq $type }
+      keys %{ $self->filter_data }
+  }
 
 }
 
