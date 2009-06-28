@@ -25,11 +25,19 @@ Perhaps a little code snippet.
 
 =cut
 
+BEGIN {
+  my @types = qw( Tab FilterType FilterCategory );
+  Moose::Util::TypeConstraints::class_type($_) for @types;
+}
+
+
 class DDI::Compendium {
+    use Moose::Util::TypeConstraints qw(enum find_type_constraint);
 
     use Carp qw(carp);
     use English qw(-no_match_vars);
     use List::MoreUtils qw(uniq true);
+
     use URI;
     use WWW::Mechanize;
     use XML::LibXML;
@@ -77,11 +85,7 @@ class DDI::Compendium {
         default  => sub { XML::LibXML->new(); }
     );
 
-    has tabs => (
-        isa        => 'ArrayRef',
-        is         => 'ro',
-        lazy_build => 1,
-    );
+    enum 'Tab' => __PACKAGE__->new->_build_tabs();
 
     sub _build_tabs {
         my $self = shift;
@@ -95,11 +99,12 @@ class DDI::Compendium {
         $query_uri->query_form($null_query);
 
         my $content = $self->ua->get($query_uri)->content();
-        my $tot_doc = $self->parser->parse_string($content)
+        my $tot_doc = $self->parser->parse_string($content)->getDocumentElement
           or return;
 
-        return [ map { $_->data } $tot_doc->getDocumentElement->findnodes('Table/text()') ];
+        return map { $_->findvalue('Table') } $tot_doc->findnodes('*/Tab');
     }
+    
 
     has filters_doc => (
         isa      => 'XML::LibXML::Document',
@@ -113,22 +118,8 @@ class DDI::Compendium {
         }
     );
 
-    has filter_types => (
-        isa        => 'ArrayRef',
-        is         => 'rw',
-        lazy_build => 1,
-    );
-
-    sub _build_filter_types {
-        my $self = shift;
-
-        return [
-            uniq(
-                map { $_->findvalue('type') }
-                  $self->filters_doc->getDocumentElement->findnodes('Option')
-            )
-        ];
-    }
+    enum 'FilterType' => uniq map { $_->findvalue('type') }
+      __PACKAGE__->new->filters_doc->getDocumentElement->findnodes('Option');
 
     has filter_data => (
         isa        => 'HashRef',
@@ -139,7 +130,7 @@ class DDI::Compendium {
     sub _build_filter_data {
         my $self = shift;
 
-        my $doc_elem    = $self->filters_doc->getDocumentElement;
+        my $doc_elem = $self->filters_doc->getDocumentElement;
         return {
             map {
                 $_->findvalue('val') => {
@@ -147,36 +138,40 @@ class DDI::Compendium {
                     id   => $_->findvalue('id'),
                   }
               }
-              map { $doc_elem->findnodes("Option[type = '$_']") } @{ $self->filter_types }
+              map { $doc_elem->findnodes("Option[type = '$_']") }
+              @{ find_type_constraint('FilterType')->values }
         };
     }
 
+    enum 'FilterCategory' => __PACKAGE__->new->_build_filter_search_categories;
 
-    method tab_view_all( Str $tab ) {
-
-      if ( not true { $tab eq $_ } @{ $self->tabs } ) {
-          carp("'$tab': Unknown Tab");
-          return;
-      }
-
-      my $all_query = { Tab => $tab, };
-      my $query_uri = $self->all_uri();
-
-      $query_uri->query_form($all_query);
-      my $content = $self->ua->get($query_uri)->content;
-
-      return $self->parser->parse_string($content);
+    sub _build_filter_search_categories {
+        my $self = shift;
+        return uniq grep { $_ if defined }
+          map { $self->filter_data->{$_}->{type} if $self->filter_data->{$_}->{id} != 0 }
+          keys %{ $self->filter_data };
     }
 
-    method filters_by_type( Str $type ) {
-      if ( not true { $type eq $_ } @{ $self->filter_types } ) {
-        carp("Unknown filter type: '$type'");
-        return;
+    method view_all_doc( Tab $tab ) {
+
+        my $all_query = { Tab => $tab, };
+          my $query_uri = $self->all_uri();
+
+          $query_uri->query_form($all_query);
+          my $content = $self->ua->get($query_uri)->content;
+
+          return $self->parser->parse_string($content);
       }
 
-      return grep { $_ if $self->filter_data->{$_}->{type} eq $type }
-        keys %{ $self->filter_data }
-    }
+      method filters_by_type( FilterType $type ) {
+        if ( not true { $type eq $_ } @{ $self->filter_types } ) {
+            carp("Unknown filter type: '$type'");
+            return;
+        }
+
+        return grep { $_ if $self->filter_data->{$_}->{type} eq $type }
+          keys %{ $self->filter_data }
+      }
 
 }
 
