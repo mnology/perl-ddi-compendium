@@ -25,167 +25,47 @@ Perhaps a little code snippet.
 
 =cut
 
-class DDI::Compendium {
-    use List::MoreUtils qw(true uniq);
+class DDI::Compendium with DDI::Compendium::Data {
     use Carp qw(carp);
 
-    use URI;
-    use WWW::Mechanize;
-    use XML::LibXML;
+    
 
-    # API URI attribute construction
-    has base_uri => (
-        isa      => 'Str',
-        is       => 'ro',
-        required => 1,
-        default =>
-          'http://www.wizards.com/dndinsider/compendium/CompendiumSearch.asmx/',
-    );
+    method view_all_doc( Str $tab! ) {
 
-    my %uri_attrs = (
-        filters_uri       => 'GetFilterSelect',
-        keyword_uri       => 'KeywordSearch',
-        filter_search_uri => 'KeywordSearchWithFilters',
-        all_uri           => 'ViewAll',
-    );
-
-    while ( my ( $attr, $oper ) = each %uri_attrs ) {
-        has $attr => (
-            isa      => 'URI',
-            is       => 'ro',
-            lazy     => 1,
-            required => 1,
-            default  => sub {
-                my $self = shift;
-                URI->new( $self->base_uri() . $oper );
-            },
-        );
-    }
-
-    has ua => (
-        isa      => 'WWW::Mechanize',
-        is       => 'rw',
-        required => 1,
-        default  => sub { WWW::Mechanize->new() },
-    );
-
-    has parser => (
-        isa      => 'XML::LibXML',
-        is       => 'ro',
-        required => 1,
-        default  => sub { XML::LibXML->new(); }
-    );
-
-    has tabs => (
-        isa        => 'ArrayRef',
-        is         => 'ro',
-        lazy_build => 1,
-    );
-
-    sub _build_tabs {
-        my $self = shift;
-
-        my $null_query = {
-            Keywords => q{.},
-            Tab      => q{},
-        };
-
-        my $query_uri = $self->keyword_uri();
-        $query_uri->query_form($null_query);
-
-        my $content = $self->ua->get($query_uri)->content();
-        my $tot_doc = $self->parser->parse_string($content)->getDocumentElement()
-          or return;
-
-        return [ map { $_->findvalue('Table') } $tot_doc->findnodes('*/Tab') ];
-    }
-
-    has filters_doc => (
-        isa      => 'XML::LibXML::Document',
-        is       => 'rw',
-        lazy     => 1,
-        required => 1,
-        default  => sub {
-            my $self = shift;
-            $self->parser->parse_string( $self->ua->get( $self->filters_uri() )->content() );
-        }
-    );
-
-    has filter_types => (
-        isa        => 'ArrayRef',
-        is         => 'ro',
-        lazy_build => 1,
-    );
-
-    sub _build_filter_types {
-        my $self = shift;
-        [ uniq map { $_->findvalue('type') }
-              $self->filters_doc->getDocumentElement->findnodes('Option') ];
-    }
-
-    has filter_data => (
-        isa        => 'HashRef',
-        is         => 'rw',
-        lazy_build => 1,
-    );
-
-    sub _build_filter_data {
-        my $self = shift;
-
-        my $doc_elem = $self->filters_doc->getDocumentElement;
-        return {
-            map {
-                $_->findvalue('type') => { 
-                     $_->findvalue('val') => $_->findvalue('id'),
-                  }
-              }
-              map { $doc_elem->findnodes("Option[type = '$_']") } @{ $self->filter_types() }
-        };
-    }
-
-    has filter_search_categories => (
-        isa        => 'ArrayRef',
-        is         => 'ro',
-        lazy_build => 1,
-    );
-
-    sub _build_filter_search_categories {
-
-        my $self = shift;
-
-        return [
-            uniq grep { $_ if defined }
-              map { $self->filter_data->{$_}->{type} if $self->filter_data->{$_}->{id} != 0 }
-              keys %{ $self->filter_data }
-        ];
-    }
-
-    method view_all_doc( Str $tab ) {
-
-        if ( not true { $tab eq $_ } @{ $self->tabs() } ) {
+        if ( not $tab ~~ @{ $self->tabs() } ) {
             $self->carp("Tab Unknown: '$tab'");
             return;
         }
 
         my $all_query = { Tab => $tab, };
-          my $query_uri = $self->all_uri();
+            my $query_uri = $self->all_uri();
 
-          $query_uri->query_form($all_query);
-          my $content = $self->ua->get($query_uri)->content;
+            $query_uri->query_form($all_query);
+            my $content = $self->ua->get($query_uri)->content;
 
-          return $self->parser->parse_string($content);
+            return $self->parser->parse_string($content);
       }
 
-      method filters_by_type( Str $type ) {
-
-        if ( not true { $type eq $_ } @{ $self->filter_types() } ) {
-            $self->carp("Type Unknown: '$type'");
+      method keyword_search( ArrayRef[Str] $keywords!, Str $tab?, Bool $name_only?, HashRef $filter? ) {
+        if ( $tab and not $tab ~~ @{ $self->tabs } ) {
+            $self->carp("Tab Unknown: '$tab'");
             return;
         }
 
-        return grep { $_ if $self->filter_data->{$_}->{type} eq $type }
-          keys %{ $self->filter_data }
-      }
+        my $query_uri = defined $filter ? $self->filter_search_uri() : $self->keyword_uri();
+
+        my $keyword_query = {
+            Keywords => join( q{ }, @$keywords ),
+            NameOnly => ( defined $name_only and $name_only == 1 ) ? 'true' : 'false',
+            Tab => defined $tab ? $tab : q{},
+        };
+
+        $keyword_query->{Filters} = xlate_filter($filter) if $filter;
+        $query_uri->query_form($keyword_query);
+
+        # make a parse_results which will handle cases for each type of /total
+        return parse_search( $self->ua->get($query_uri)->content );
+       }
 
 }
 
