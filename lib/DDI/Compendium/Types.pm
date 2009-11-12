@@ -3,18 +3,18 @@ package DDI::Compendium::Types;
 use strict;
 use warnings;
 
-use MooseX::Types -declare => [ qw( XMLDoc ) ];
+use MooseX::Types -declare => [ qw( XMLElem ) ];
 use MooseX::Types::Moose qw( Str );
 
 use XML::LibXML;
 
-class_type XMLDoc, { class => 'XML::LibXML::Document' };
+class_type XMLElem, { class => 'XML::LibXML::Element' };
 
-coerce XMLDoc,
+coerce XMLElem,
     from Str,
     via {
         my $parser = XML::LibXML->new;
-        $parser->parse_string($_)
+        $parser->parse_string($_)->getDocumentElement;
     };
 
 1;

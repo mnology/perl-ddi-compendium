@@ -38,15 +38,11 @@ class DDI::Compendium with DDI::Compendium::Data {
         }
 
         my $all_query = { Tab => $tab, };
-            my $query_uri = $self->all_uri();
 
-            $query_uri->query_form($all_query);
-            my $content = $self->ua->get($query_uri)->content;
-
-            return $self->parser->parse_string($content);
+        return $self->get_doc($self->query_content($all_query));
       }
 
-      method keyword_search( ArrayRef[Str] $keywords!, Str $tab?, Bool $name_only?, HashRef $filter? ) {
+    method keyword_search( ArrayRef[Str] $keywords!, Str $tab?, Bool $name_only?, HashRef $filter? ) {
         if ( $tab and not $tab ~~ @{ $self->tabs } ) {
             $self->carp("Tab Unknown: '$tab'");
             return;
@@ -60,12 +56,11 @@ class DDI::Compendium with DDI::Compendium::Data {
             Tab => defined $tab ? $tab : q{},
         };
 
-        $keyword_query->{Filters} = xlate_filter($filter) if $filter;
-        $query_uri->query_form($keyword_query);
+        $keyword_query->{Filters} = $self->translate_filter($filter) if $filter;
 
         # make a parse_results which will handle cases for each type of /total
-        return parse_search( $self->ua->get($query_uri)->content );
-       }
+        return $self->parse_search( $keyword_query );
+    }
 
 }
 

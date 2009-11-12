@@ -33,7 +33,7 @@ role DDI::Compendium::Filter with (DDI::Compendium::Parser, DDI::Compendium::WWW
         };
     }
 
-    method filters_by_type( Str $type! ) {
+    method filter_by_type( Str $type! ) {
         if ( not $type ~~ $self->filter_types ) {
             $self->carp("Filter Type Unknown: '$type'");
             return;
@@ -41,6 +41,10 @@ role DDI::Compendium::Filter with (DDI::Compendium::Parser, DDI::Compendium::WWW
 
         return sort grep { $_ if defined }
             map { $_ if $self->filters->{$_}->{'type'} eq $type } keys %{ $self->filters };
+    }
+
+    method translate_filter ( HashRef $filter!) {
+
     }
 
 }

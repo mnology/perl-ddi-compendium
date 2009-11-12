@@ -1,12 +1,14 @@
 use MooseX::Declare;
 
 role DDI::Compendium::URI {
-    use URI;
+    use MooseX::Types::URI qw( Uri );
 
     has base_uri => (
-        isa      => 'Str',
+        isa      => Uri,
         is       => 'ro',
         required => 1,
+        coerce   => 1,
+        lazy     => 1,
         default =>
             'http://www.wizards.com/dndinsider/compendium/CompendiumSearch.asmx/',
     );
@@ -21,10 +23,11 @@ role DDI::Compendium::URI {
 
     while ( my ( $attr, $oper ) = each %uri_attrs ) {
         has $attr => (
-            isa      => URI,
+            isa      => Uri,
             is       => 'ro',
             lazy     => 1,
             required => 1,
+            coerce   => 1,
             default  => sub {
                 my $self = shift;
                 $self->get_oper_uri( $oper );
@@ -33,7 +36,7 @@ role DDI::Compendium::URI {
     }
 
     method get_oper_uri ( Str $oper! ) {
-        URI->new( $self->base_uri() . $oper );
+        $self->base_uri() . $oper;
     }
 
 }

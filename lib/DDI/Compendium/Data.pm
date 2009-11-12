@@ -20,13 +20,10 @@ role DDI::Compendium::Data with DDI::Compendium::Filter {
             Tab      => q{},
         };
 
-        my $query_uri = $self->keyword_uri();
-        $query_uri->query_form($null_query);
-
-        my $tot_doc = $self->get_doc($self->get_content( $query_uri ) )
+        my $tot_doc = $self->get_doc($self->query_content($null_query))
             or return;
 
-        return [ map { $_->findvalue('Table') } $tot_doc->findnodes('*/Tab') ];
+        return [ sort map { $_->findvalue('Table') } $tot_doc->findnodes('*/Tab') ];
     }
 
     
