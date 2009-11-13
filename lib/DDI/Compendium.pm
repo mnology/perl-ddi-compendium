@@ -25,7 +25,7 @@ Perhaps a little code snippet.
 
 =cut
 
-class DDI::Compendium with DDI::Compendium::Data {
+class DDI::Compendium with (DDI::Compendium::Data, DDI::Compendium::Auth) {
     use Carp qw(carp);
 
     method view_all_doc( Str $tab! ) {
