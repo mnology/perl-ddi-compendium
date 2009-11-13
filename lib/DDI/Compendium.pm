@@ -28,19 +28,9 @@ Perhaps a little code snippet.
 class DDI::Compendium with DDI::Compendium::Data {
     use Carp qw(carp);
 
-    
-
     method view_all_doc( Str $tab! ) {
-
-        if ( not $tab ~~ @{ $self->tabs() } ) {
-            $self->carp("Tab Unknown: '$tab'");
-            return;
-        }
-
-        my $all_query = { Tab => $tab, };
-
-        return $self->get_doc($self->query_content($all_query));
-      }
+        return $self->get_doc($self->all_content($tab));
+    }
 
     method keyword_search( ArrayRef[Str] $keywords!, Str $tab?, Bool $name_only?, HashRef $filter? ) {
         if ( $tab and not $tab ~~ @{ $self->tabs } ) {

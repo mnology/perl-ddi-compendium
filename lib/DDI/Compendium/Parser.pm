@@ -1,7 +1,7 @@
 use MooseX::Declare;
 
 role DDI::Compendium::Parser {
-    use DDI::Compendium::Types qw ( XMLElem );
+    use DDI::Compendium::Types qw (Class XMLElem);
 
     method get_doc ( XMLElem $doc! does coerce ){
         return $doc;
@@ -13,14 +13,23 @@ role DDI::Compendium::Parser {
 
         my @result_tabs = $self->tabs_with_results( $doc );
 
-        my $parse_dispatch = { map { my $sub = 'parse_' . lc($_); $_ => \&$sub } @{$self->tabs} };
+        #my $parse_tabs = {  map{} @{$self->tabs} };
     }
 
     method tabs_with_results ( XMLElem $doc! ) {
-        return map { $_->findvalue('Table') } $doc->findnodes('//Totals/Tab[Total != 0]');
+        return map { $_->textContent } $doc->findnodes('//Totals/Tab[Total != 0]/Table');
     }
 
-    method parse_class {}
+    method tab_coerce (Str $tab!){
+        if (not $tab ~~ $self->tabs) {
+            $self->carp("Unknown Tab '$tab'");
+            return;
+        }
+    }
+
+    method parse_class ( Class $elem! does coerce ) {
+        
+    }
     method parse_deity {}
     method parse_epicdestiny{}
     method parse_feat {}
@@ -35,4 +44,6 @@ role DDI::Compendium::Parser {
     method parse_trap {}
 }
 
+#map { my $sub = 'parse_' . lc($_); $_ => \&$sub }
+#
 1;

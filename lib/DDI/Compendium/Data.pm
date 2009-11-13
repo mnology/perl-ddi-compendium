@@ -26,6 +26,16 @@ role DDI::Compendium::Data with DDI::Compendium::Filter {
         return [ sort map { $_->findvalue('Table') } $tot_doc->findnodes('*/Tab') ];
     }
 
+    method names_from_tab ( Str $tab ) {
+        if ( not $tab ~~ $self->tabs ) {
+            $self->carp("Unknown Tab '$tab'");
+            return;
+        }
+
+        my $tab_doc = $self->get_doc($self->all_content($tab));
+
+        uniq sort map { $_->textContent } $tab_doc->findnodes("//Data/Results/$tab/Name");
+    }
     
 }
 

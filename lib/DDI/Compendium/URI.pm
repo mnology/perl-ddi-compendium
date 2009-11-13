@@ -3,14 +3,22 @@ use MooseX::Declare;
 role DDI::Compendium::URI {
     use MooseX::Types::URI qw( Uri );
 
-    has base_uri => (
-        isa      => Uri,
-        is       => 'ro',
-        required => 1,
-        coerce   => 1,
-        lazy     => 1,
-        default =>
-            'http://www.wizards.com/dndinsider/compendium/CompendiumSearch.asmx/',
+    has api_uri => (
+        isa         => Uri,
+        is          => 'ro',
+        required    => 1,
+        coerce      => 1,
+        lazy        => 1,
+        default     =>'http://www.wizards.com/dndinsider/compendium/CompendiumSearch.asmx/',
+    );
+
+    has ddi_uri => (
+        isa         => Uri,
+        is          => 'ro',
+        required    => 1,
+        coerce      => 1,
+        lazy        => 1,
+        default     => 'http://www.wizards.com/dnd/Default.aspx',
     );
 
     # attrs for each available search URI
@@ -36,7 +44,7 @@ role DDI::Compendium::URI {
     }
 
     method get_oper_uri ( Str $oper! ) {
-        $self->base_uri() . $oper;
+        $self->api_uri() . $oper;
     }
 
 }
